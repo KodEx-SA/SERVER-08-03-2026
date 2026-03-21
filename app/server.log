@@ -1,0 +1,8 @@
+Database initialized successfully
+=================================
+Intern Management System Server
+=================================
+Server running on port 3001
+API URL: http://localhost:3001/api
+Default Super Admin: superadmin@internsystem.com / Admin@123
+=================================
