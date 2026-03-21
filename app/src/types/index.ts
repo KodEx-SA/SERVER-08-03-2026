@@ -1,3 +1,5 @@
+// ── Existing IMS types ────────────────────────────────────────────────────────
+
 export interface User {
   id: number;
   email: string;
@@ -5,6 +7,9 @@ export interface User {
   internId?: number;
   internCode?: string;
   approvalStatus?: 'pending' | 'approved' | 'rejected';
+  // eullafied-compat fields (present when enriched by tickets/dept queries)
+  firstName?: string;
+  lastName?: string;
 }
 
 export interface Intern {
@@ -107,3 +112,86 @@ export interface DeviceInfo {
   os: string;
   device: string;
 }
+
+// ── New: Departments ──────────────────────────────────────────────────────────
+
+export interface Department {
+  id: number;
+  name: string;
+  description?: string;
+  head_of_department?: string;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── New: Tickets ──────────────────────────────────────────────────────────────
+
+export type TicketStatus   = 'open' | 'in_progress' | 'resolved' | 'closed' | 'cancelled';
+export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface TicketUser {
+  id: number;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+}
+
+export interface Ticket {
+  id: number;
+  ticket_number: string;
+  title: string;
+  description: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  category?: string;
+  created_by: number;
+  assigned_to?: number;
+  department_id?: number;
+  resolution_notes?: string;
+  resolved_at?: string;
+  closed_at?: string;
+  created_at: string;
+  updated_at: string;
+  // enriched
+  createdBy?: TicketUser;
+  assignedTo?: TicketUser;
+  department?: Department;
+}
+
+export interface CreateTicketDto {
+  title: string;
+  description: string;
+  priority: TicketPriority;
+  departmentId?: number;
+  category?: string;
+}
+
+export interface UpdateTicketDto {
+  title?: string;
+  description?: string;
+  status?: TicketStatus;
+  priority?: TicketPriority;
+  category?: string;
+  assignedToId?: number;
+  resolutionNotes?: string;
+}
+
+// ── Display helpers ───────────────────────────────────────────────────────────
+
+export const STATUS_LABEL: Record<TicketStatus, string> = {
+  open:        'Open',
+  in_progress: 'In Progress',
+  resolved:    'Resolved',
+  closed:      'Closed',
+  cancelled:   'Cancelled',
+};
+
+export const PRIORITY_LABEL: Record<TicketPriority, string> = {
+  low:    'Low',
+  medium: 'Medium',
+  high:   'High',
+  urgent: 'Urgent',
+};
+
+export const ticketNumber = (t: Ticket) => t.ticket_number;
