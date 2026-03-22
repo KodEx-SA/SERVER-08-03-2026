@@ -1,216 +1,197 @@
 import { useEffect, useState } from 'react';
 import { InternLayout } from '@/components/layouts/InternLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { MapPin, Monitor, Globe, Clock, Calendar, Navigation } from 'lucide-react';
 import { api } from '@/services/api';
 import type { LoginLog } from '@/types';
 import { toast } from 'sonner';
+
+function duration(login: string, logout?: string) {
+  if (!logout) return null;
+  const diff = new Date(logout).getTime() - new Date(login).getTime();
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function GoogleMapsLink({ lat, lng }: { lat: number; lng: number }) {
+  return (
+    <a href={`https://www.google.com/maps?q=${lat},${lng}`} target="_blank" rel="noreferrer"
+      className="inline-flex items-center gap-1 text-xs font-medium hover:underline" style={{ color:'#16a34a' }}>
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+      View on map
+    </a>
+  );
+}
 
 export default function InternLoginHistory() {
   const [history, setHistory] = useState<LoginLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchHistory();
+    api.getLoginHistory()
+      .then(res => setHistory((res as any).history ?? []))
+      .catch(() => toast.error('Failed to load login history'))
+      .finally(() => setLoading(false));
   }, []);
 
-  const fetchHistory = async () => {
-    try {
-      const response = await api.getLoginHistory();
-      setHistory(response.history);
-    } catch (error) {
-      toast.error('Failed to load login history');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const todayLogins  = history.filter(h => new Date(h.login_time).toDateString() === new Date().toDateString()).length;
+  const activeNow    = history.filter(h => !h.logout_time).length;
+  const withGPS      = history.filter(h => h.login_latitude).length;
 
-  const formatDuration = (login: string, logout?: string) => {
-    if (!logout) return 'Active';
-    const start = new Date(login).getTime();
-    const end = new Date(logout).getTime();
-    const diff = end - start;
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}h ${minutes}m`;
-  };
-
-  if (loading) {
-    return (
-      <InternLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
-      </InternLayout>
-    );
-  }
+  if (loading) return (
+    <InternLayout>
+      <div className="flex items-center justify-center h-64">
+        <div className="w-10 h-10 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor:'rgba(22,163,74,0.2)', borderTopColor:'#16a34a' }}/>
+      </div>
+    </InternLayout>
+  );
 
   return (
     <InternLayout>
       <div className="space-y-6">
+
+        {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold">Login History</h1>
-          <p className="text-slate-600">View your login activity and location history</p>
+          <h1 className="text-2xl font-bold text-gray-900">Login History</h1>
+          <p className="text-gray-500 text-sm mt-1">Your login sessions and GPS attendance records</p>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">{history.length}</div>
-              <p className="text-sm text-slate-500">Total Logins</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">
-                {history.filter(h => !h.logout_time).length}
-              </div>
-              <p className="text-sm text-slate-500">Active Sessions</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">
-                {history.filter(h => h.login_latitude).length}
-              </div>
-              <p className="text-sm text-slate-500">With GPS Data</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">
-                {history.filter(h => new Date(h.login_time).toDateString() === new Date().toDateString()).length}
-              </div>
-              <p className="text-sm text-slate-500">Today's Logins</p>
-            </CardContent>
-          </Card>
+        {/* Summary */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { label:'Total Sessions', value: history.length,  bg:'bg-blue-50',   color:'text-blue-700'   },
+            { label:'Today',          value: todayLogins,      bg:'bg-green-50',  color:'text-green-700'  },
+            { label:'Active Now',     value: activeNow,        bg:'bg-orange-50', color:'text-orange-700' },
+            { label:'With GPS',       value: withGPS,          bg:'bg-purple-50', color:'text-purple-700' },
+          ].map(s => (
+            <div key={s.label} className={`${s.bg} rounded-2xl p-4`}>
+              <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+            </div>
+          ))}
         </div>
 
-        {/* Login History List */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Login Sessions ({history.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {history.length === 0 ? (
-              <div className="text-center py-12 text-slate-500">
-                <MapPin className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                <p>No login history available</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {history.map((log, index) => (
-                  <div key={log.id} className="p-4 border rounded-lg hover:bg-slate-50 transition-colors">
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                      {/* Session Info */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h4 className="font-medium">Session #{history.length - index}</h4>
-                          {!log.logout_time ? (
-                            <Badge variant="default" className="bg-green-500">Active</Badge>
-                          ) : (
-                            <Badge variant="secondary">Closed</Badge>
-                          )}
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div className="flex items-center gap-2 text-slate-600">
-                            <Calendar className="w-4 h-4" />
-                            {new Date(log.login_time).toLocaleDateString()}
-                          </div>
-                          <div className="flex items-center gap-2 text-slate-600">
-                            <Clock className="w-4 h-4" />
-                            {new Date(log.login_time).toLocaleTimeString()} 
-                            {log.logout_time && ` - ${new Date(log.logout_time).toLocaleTimeString()}`}
-                          </div>
-                          <div className="flex items-center gap-2 text-slate-600">
-                            <Monitor className="w-4 h-4" />
-                            {log.browser || 'Unknown'} on {log.os || 'Unknown'}
-                          </div>
-                          <div className="flex items-center gap-2 text-slate-600">
-                            <Globe className="w-4 h-4" />
-                            {log.ip_address || 'Unknown IP'}
-                          </div>
-                        </div>
+        {/* Sessions */}
+        {history.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16 text-center">
+            <div className="text-5xl mb-4">📍</div>
+            <p className="text-gray-500 font-medium">No login records yet</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {history.map((log, index) => {
+              const isActive = !log.logout_time;
+              const dur = duration(log.login_time, log.logout_time);
+              const loginDate = new Date(log.login_time);
+              const isToday = loginDate.toDateString() === new Date().toDateString();
 
+              return (
+                <div key={log.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                  {/* Session header */}
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}/>
+                      <div>
+                        <span className="text-sm font-semibold text-gray-800">
+                          Session #{history.length - index}
+                        </span>
+                        {isToday && <span className="ml-2 text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Today</span>}
+                      </div>
+                    </div>
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isActive ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      {isActive ? '● Active' : 'Closed'}
+                    </span>
+                  </div>
+
+                  <div className="p-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Date</p>
+                        <p className="text-sm font-medium text-gray-800">
+                          {loginDate.toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Login Time</p>
+                        <p className="text-sm font-medium text-gray-800">
+                          {loginDate.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
+                        </p>
                         {log.logout_time && (
-                          <div className="mt-2 text-sm text-slate-500">
-                            Duration: <span className="font-medium">{formatDuration(log.login_time, log.logout_time)}</span>
+                          <p className="text-xs text-gray-400">
+                            → {new Date(log.logout_time).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Duration</p>
+                        <p className="text-sm font-medium text-gray-800">{dur ?? (isActive ? 'In progress' : '—')}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Device</p>
+                        <p className="text-sm font-medium text-gray-800 truncate">{log.browser ?? 'Unknown'}</p>
+                        <p className="text-xs text-gray-400">{log.os ?? ''}</p>
+                      </div>
+                    </div>
+
+                    {/* IP */}
+                    {log.ip_address && (
+                      <div className="mb-4 inline-flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg text-xs text-gray-500">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+                        {log.ip_address}
+                      </div>
+                    )}
+
+                    {/* GPS locations */}
+                    {(log.login_latitude || log.logout_latitude) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {log.login_latitude && (
+                          <div className="p-3 rounded-xl bg-green-50 border border-green-100">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs font-semibold text-green-700">📍 Login Location</p>
+                              <GoogleMapsLink lat={log.login_latitude} lng={log.login_longitude!}/>
+                            </div>
+                            <p className="text-xs font-mono text-green-800">
+                              {log.login_latitude.toFixed(5)}, {log.login_longitude?.toFixed(5)}
+                            </p>
+                            {log.login_accuracy && (
+                              <p className="text-xs text-green-600 mt-0.5">±{Math.round(log.login_accuracy)}m accuracy</p>
+                            )}
+                          </div>
+                        )}
+                        {log.logout_latitude && (
+                          <div className="p-3 rounded-xl bg-orange-50 border border-orange-100">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs font-semibold text-orange-700">📍 Logout Location</p>
+                              <GoogleMapsLink lat={log.logout_latitude} lng={log.logout_longitude!}/>
+                            </div>
+                            <p className="text-xs font-mono text-orange-800">
+                              {log.logout_latitude.toFixed(5)}, {log.logout_longitude?.toFixed(5)}
+                            </p>
+                            {log.logout_accuracy && (
+                              <p className="text-xs text-orange-600 mt-0.5">±{Math.round(log.logout_accuracy)}m accuracy</p>
+                            )}
                           </div>
                         )}
                       </div>
-
-                      {/* GPS Location */}
-                      {log.login_latitude && (
-                        <div className="md:w-64 p-3 bg-slate-100 rounded-lg">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Navigation className="w-4 h-4 text-primary" />
-                            <span className="font-medium text-sm">Login Location</span>
-                          </div>
-                          <div className="text-sm space-y-1">
-                            <p className="font-mono text-slate-600">
-                              Lat: {log.login_latitude.toFixed(6)}
-                            </p>
-                            <p className="font-mono text-slate-600">
-                              Lng: {log.login_longitude?.toFixed(6)}
-                            </p>
-                            {log.login_accuracy && (
-                              <p className="text-xs text-slate-500">
-                                Accuracy: ±{Math.round(log.login_accuracy)}m
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Logout Location */}
-                      {log.logout_latitude && (
-                        <div className="md:w-64 p-3 bg-slate-100 rounded-lg">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Navigation className="w-4 h-4 text-orange-500" />
-                            <span className="font-medium text-sm">Logout Location</span>
-                          </div>
-                          <div className="text-sm space-y-1">
-                            <p className="font-mono text-slate-600">
-                              Lat: {log.logout_latitude.toFixed(6)}
-                            </p>
-                            <p className="font-mono text-slate-600">
-                              Lng: {log.logout_longitude?.toFixed(6)}
-                            </p>
-                            {log.logout_accuracy && (
-                              <p className="text-xs text-slate-500">
-                                Accuracy: ±{Math.round(log.logout_accuracy)}m
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
-        {/* Info Card */}
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              <MapPin className="w-5 h-5 text-blue-500 mt-0.5" />
-              <div>
-                <h4 className="font-medium text-blue-900">About GPS Tracking</h4>
-                <p className="text-sm text-blue-700 mt-1">
-                  For accurate location tracking, please allow location access when prompted during login and logout. 
-                  This helps us maintain security and verify your attendance. Your location data is securely stored 
-                  and only accessible to authorized administrators.
-                </p>
-              </div>
+        {/* GPS info card */}
+        <div className="bg-green-50 rounded-2xl border border-green-100 p-5">
+          <div className="flex items-start gap-3">
+            <span className="text-xl flex-shrink-0">🔒</span>
+            <div>
+              <p className="text-sm font-semibold text-green-800">About GPS Tracking</p>
+              <p className="text-xs text-green-700 mt-1 leading-relaxed">
+                Allow location access when prompted during login and logout for accurate attendance recording. Your location is securely stored and only accessible to authorised administrators.
+              </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </InternLayout>
   );
