@@ -24,15 +24,7 @@ export default function AdminLoginPage() {
 
     try {
       await login(email, password);
-      // After successful login, check role and redirect
-      const userData = JSON.parse(localStorage.getItem('user') || '{}');
-      if (userData.role === 'super_admin') {
-        navigate('/superadmin');
-      } else if (userData.role === 'admin') {
-        navigate('/admin');
-      } else {
-        setError('You do not have admin access. Please use the Intern Portal.');
-      }
+      // AppRoutes automatically redirects based on role after login
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
