@@ -1,369 +1,206 @@
 import { useEffect, useState } from 'react';
 import { InternLayout } from '@/components/layouts/InternLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Calendar, Clock, Edit, Trash2, Loader2 } from 'lucide-react';
 import { api } from '@/services/api';
 import type { Task } from '@/types';
 import { toast } from 'sonner';
 
+type FilterStatus = 'all' | Task['status'];
+
+const statusConfig = {
+  completed:   { bg:'bg-green-50',  text:'text-green-700',  label:'Completed'   },
+  in_progress: { bg:'bg-blue-50',   text:'text-blue-700',   label:'In Progress' },
+  pending:     { bg:'bg-orange-50', text:'text-orange-700', label:'Pending'     },
+  cancelled:   { bg:'bg-gray-100',  text:'text-gray-500',   label:'Cancelled'   },
+};
+
 export default function InternTasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [saving, setSaving] = useState(false);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState<FilterStatus>('all');
+  const [form, setForm] = useState({ title:'', description:'', taskDate: new Date().toISOString().slice(0,10), hoursSpent:'', status:'completed' });
 
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    taskDate: new Date().toISOString().split('T')[0],
-    hoursSpent: '',
-    status: 'completed'
-  });
-
-  useEffect(() => {
-    fetchTasks();
-  }, []);
+  useEffect(() => { fetchTasks(); }, []);
 
   const fetchTasks = async () => {
-    try {
-      const response = await api.getTasks();
-      setTasks(response.tasks);
-    } catch (error) {
-      toast.error('Failed to load tasks');
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    try { const res = await api.getTasks(); setTasks((res as any).tasks ?? []); }
+    catch { toast.error('Failed to load tasks'); }
+    finally { setLoading(false); }
+  };
+
+  const openCreate = () => {
+    setEditingTask(null);
+    setForm({ title:'', description:'', taskDate: new Date().toISOString().slice(0,10), hoursSpent:'', status:'completed' });
+    setShowModal(true);
+  };
+
+  const openEdit = (task: Task) => {
+    setEditingTask(task);
+    setForm({ title: task.title, description: task.description ?? '', taskDate: task.task_date, hoursSpent: task.hours_spent?.toString() ?? '', status: task.status });
+    setShowModal(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-
     try {
-      if (editingTask) {
-        await api.updateTask(editingTask.id, {
-          title: formData.title,
-          description: formData.description,
-          hoursSpent: parseFloat(formData.hoursSpent) || null,
-          status: formData.status
-        });
-        toast.success('Task updated successfully');
-      } else {
-        await api.createTask({
-          title: formData.title,
-          description: formData.description,
-          taskDate: formData.taskDate,
-          hoursSpent: parseFloat(formData.hoursSpent) || null,
-          status: formData.status
-        });
-        toast.success('Task created successfully');
-      }
-
-      setDialogOpen(false);
-      resetForm();
-      fetchTasks();
-    } catch (error) {
-      toast.error(editingTask ? 'Failed to update task' : 'Failed to create task');
-    } finally {
-      setSaving(false);
-    }
+      const payload = { title: form.title, description: form.description || undefined, taskDate: form.taskDate, hoursSpent: form.hoursSpent ? Number(form.hoursSpent) : undefined, status: form.status };
+      if (editingTask) { await api.updateTask(editingTask.id, payload); toast.success('Task updated'); }
+      else { await api.createTask(payload); toast.success('Task created'); }
+      setShowModal(false); fetchTasks();
+    } catch { toast.error(editingTask ? 'Failed to update task' : 'Failed to create task'); }
+    finally { setSaving(false); }
   };
 
-  const handleDelete = async (taskId: number) => {
-    if (!confirm('Are you sure you want to delete this task?')) return;
-
-    try {
-      await api.deleteTask(taskId);
-      toast.success('Task deleted successfully');
-      fetchTasks();
-    } catch (error) {
-      toast.error('Failed to delete task');
-    }
+  const handleDelete = async (id: number) => {
+    if (!confirm('Delete this task?')) return;
+    try { await api.deleteTask(id); toast.success('Task deleted'); fetchTasks(); }
+    catch { toast.error('Failed to delete task'); }
   };
 
-  const handleEdit = (task: Task) => {
-    setEditingTask(task);
-    setFormData({
-      title: task.title,
-      description: task.description || '',
-      taskDate: task.task_date,
-      hoursSpent: task.hours_spent?.toString() || '',
-      status: task.status
-    });
-    setDialogOpen(true);
-  };
-
-  const resetForm = () => {
-    setEditingTask(null);
-    setFormData({
-      title: '',
-      description: '',
-      taskDate: new Date().toISOString().split('T')[0],
-      hoursSpent: '',
-      status: 'completed'
-    });
-  };
-
-  const filteredTasks = tasks.filter(task => {
-    if (filter === 'all') return true;
-    if (filter === 'today') {
-      const taskDate = new Date(task.task_date).toDateString();
-      const today = new Date().toDateString();
-      return taskDate === today;
-    }
-    if (filter === 'week') {
-      const taskDate = new Date(task.task_date);
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      return taskDate >= weekAgo;
-    }
-    return task.status === filter;
-  });
-
-  const totalHours = filteredTasks.reduce((sum, t) => sum + (t.hours_spent || 0), 0);
-
-  if (loading) {
-    return (
-      <InternLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
-      </InternLayout>
-    );
-  }
+  const filtered = filter === 'all' ? tasks : tasks.filter(t => t.status === filter);
+  const totalHours = tasks.filter(t => t.hours_spent).reduce((s, t) => s + (t.hours_spent ?? 0), 0);
+  const todayCount = tasks.filter(t => new Date(t.task_date).toDateString() === new Date().toDateString()).length;
 
   return (
     <InternLayout>
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">My Tasks</h1>
-            <p className="text-slate-600">Log and manage your daily work</p>
+            <h1 className="text-2xl font-bold text-gray-900">My Tasks</h1>
+            <p className="text-gray-500 text-sm mt-1">Log and track your daily work</p>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={(open) => {
-            setDialogOpen(open);
-            if (!open) resetForm();
-          }}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Log New Task
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle>{editingTask ? 'Edit Task' : 'Log New Task'}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="title">Task Title *</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="e.g., Completed API integration"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Describe what you did..."
-                    rows={3}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="taskDate">Date *</Label>
-                    <Input
-                      id="taskDate"
-                      type="date"
-                      value={formData.taskDate}
-                      onChange={(e) => setFormData({ ...formData, taskDate: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="hoursSpent">Hours Spent</Label>
-                    <Input
-                      id="hoursSpent"
-                      type="number"
-                      step="0.5"
-                      min="0"
-                      max="24"
-                      value={formData.hoursSpent}
-                      onChange={(e) => setFormData({ ...formData, hoursSpent: e.target.value })}
-                      placeholder="e.g., 2.5"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value) => setFormData({ ...formData, status: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex gap-3">
-                  <Button type="button" variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" className="flex-1" disabled={saving}>
-                    {saving ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      editingTask ? 'Update Task' : 'Log Task'
-                    )}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <button onClick={openCreate} className="inline-flex items-center gap-2 px-4 py-2.5 text-white text-sm font-semibold rounded-xl shadow-sm hover:opacity-90"
+            style={{ background:'linear-gradient(135deg,#16a34a,#15803d)' }}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
+            Log Task
+          </button>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">{tasks.length}</div>
-              <p className="text-sm text-slate-500">Total Tasks</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">
-                {tasks.filter(t => t.status === 'completed').length}
-              </div>
-              <p className="text-sm text-slate-500">Completed</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">
-                {tasks.reduce((sum, t) => sum + (t.hours_spent || 0), 0).toFixed(1)}
-              </div>
-              <p className="text-sm text-slate-500">Total Hours</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">
-                {tasks.filter(t => new Date(t.task_date).toDateString() === new Date().toDateString()).length}
-              </div>
-              <p className="text-sm text-slate-500">Today's Tasks</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Filter */}
-        <div className="flex flex-wrap gap-2">
-          <Button variant={filter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('all')}>
-            All
-          </Button>
-          <Button variant={filter === 'today' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('today')}>
-            Today
-          </Button>
-          <Button variant={filter === 'week' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('week')}>
-            This Week
-          </Button>
-          <Button variant={filter === 'completed' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('completed')}>
-            Completed
-          </Button>
-          <Button variant={filter === 'pending' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('pending')}>
-            Pending
-          </Button>
-        </div>
-
-        {/* Tasks List */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Tasks ({filteredTasks.length})</CardTitle>
-              <div className="text-sm text-slate-500">
-                Total Hours: <span className="font-medium">{totalHours.toFixed(1)}</span>
-              </div>
+        {/* Summary */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { label:'Total Tasks',  value: tasks.length,                                                bg:'bg-blue-50',   color:'text-blue-700'   },
+            { label:'Today',        value: todayCount,                                                  bg:'bg-green-50',  color:'text-green-700'  },
+            { label:'Completed',    value: tasks.filter(t => t.status==='completed').length,            bg:'bg-teal-50',   color:'text-teal-700'   },
+            { label:'Total Hours',  value: totalHours % 1 === 0 ? totalHours : totalHours.toFixed(1),  bg:'bg-purple-50', color:'text-purple-700' },
+          ].map(s => (
+            <div key={s.label} className={`${s.bg} rounded-2xl p-4`}>
+              <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
             </div>
-          </CardHeader>
-          <CardContent>
-            {filteredTasks.length === 0 ? (
-              <div className="text-center py-12 text-slate-500">
-                <Calendar className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                <p>No tasks found</p>
-                <Button variant="outline" className="mt-3" onClick={() => setDialogOpen(true)}>
-                  Log Your First Task
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredTasks.map((task) => (
-                  <div key={task.id} className="flex items-start justify-between p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-medium">{task.title}</h4>
-                        <Badge variant={
-                          task.status === 'completed' ? 'default' :
-                          task.status === 'in_progress' ? 'secondary' :
-                          task.status === 'pending' ? 'outline' : 'destructive'
-                        }>
-                          {task.status.replace('_', ' ')}
-                        </Badge>
+          ))}
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap gap-2">
+          {(['all','completed','in_progress','pending','cancelled'] as FilterStatus[]).map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`px-3 py-2 rounded-xl text-xs font-medium capitalize transition-colors ${filter===f ? 'text-white shadow-sm' : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'}`}
+              style={filter===f ? { background:'linear-gradient(135deg,#16a34a,#15803d)' } : {}}>
+              {f === 'all' ? `All (${tasks.length})` : `${statusConfig[f as keyof typeof statusConfig]?.label} (${tasks.filter(t => t.status===f).length})`}
+            </button>
+          ))}
+        </div>
+
+        {/* Tasks list */}
+        {loading ? (
+          <div className="flex justify-center py-16"><div className="w-10 h-10 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor:'rgba(22,163,74,0.2)', borderTopColor:'#16a34a' }}/></div>
+        ) : filtered.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16 text-center">
+            <div className="text-5xl mb-4">📋</div>
+            <p className="text-gray-500 font-medium">{tasks.length === 0 ? 'No tasks yet — log your first one!' : 'No tasks match this filter'}</p>
+            {tasks.length === 0 && <button onClick={openCreate} className="mt-4 px-4 py-2 text-white text-sm font-medium rounded-xl" style={{ background:'linear-gradient(135deg,#16a34a,#15803d)' }}>Log Task</button>}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map(task => {
+              const sc = statusConfig[task.status] ?? statusConfig.pending;
+              return (
+                <div key={task.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sc.bg} ${sc.text}`}>{sc.label}</span>
+                        {task.hours_spent && <span className="text-xs text-gray-400">⏱ {task.hours_spent}h</span>}
+                        <span className="text-xs text-gray-400">📅 {new Date(task.task_date).toLocaleDateString('en-ZA', { day:'numeric', month:'short' })}</span>
                       </div>
-                      {task.description && (
-                        <p className="text-sm text-slate-600 mb-2">{task.description}</p>
-                      )}
-                      <div className="flex items-center gap-4 text-xs text-slate-500">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {new Date(task.task_date).toLocaleDateString()}
-                        </span>
-                        {task.hours_spent && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {task.hours_spent} hours
-                          </span>
-                        )}
-                      </div>
+                      <p className="text-sm font-semibold text-gray-900">{task.title}</p>
+                      {task.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{task.description}</p>}
                     </div>
-                    <div className="flex gap-2 ml-4">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(task)}>
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(task.id)}>
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </Button>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button onClick={() => openEdit(task)} className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                      </button>
+                      <button onClick={() => handleDelete(task.id)} className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold text-gray-900">{editingTask ? 'Edit Task' : 'Log New Task'}</h2>
+              <button onClick={() => setShowModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Title <span className="text-red-500">*</span></label>
+                <input required value={form.title} onChange={e => setForm(f => ({...f, title:e.target.value}))} placeholder="What did you work on?"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-500"/>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
+                  <input type="date" value={form.taskDate} onChange={e => setForm(f => ({...f, taskDate:e.target.value}))}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-500"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Hours Spent</label>
+                  <input type="number" step="0.5" min="0" max="24" value={form.hoursSpent} onChange={e => setForm(f => ({...f, hoursSpent:e.target.value}))} placeholder="e.g. 3.5"
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-500"/>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Status</label>
+                <select value={form.status} onChange={e => setForm(f => ({...f, status:e.target.value}))}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                  <option value="completed">Completed</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="pending">Pending</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
+                <textarea value={form.description} onChange={e => setForm(f => ({...f, description:e.target.value}))} rows={3} placeholder="Optional details…"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-500"/>
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button type="submit" disabled={saving} className="flex-1 py-2.5 text-white text-sm font-semibold rounded-xl disabled:opacity-60" style={{ background:'linear-gradient(135deg,#16a34a,#15803d)' }}>
+                  {saving ? 'Saving…' : editingTask ? 'Save Changes' : 'Log Task'}
+                </button>
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </InternLayout>
   );
 }

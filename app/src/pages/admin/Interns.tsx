@@ -1,12 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AdminLayout } from '@/components/layouts/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Eye, Search, UserCheck, UserX, ArrowUpDown, Filter, Download } from 'lucide-react';
 import { api } from '@/services/api';
 import type { Intern } from '@/types';
 import { toast } from 'sonner';
@@ -14,7 +8,26 @@ import { toast } from 'sonner';
 type SortField = 'name' | 'intern_code' | 'department' | 'created_at' | 'approval_status';
 type SortOrder = 'asc' | 'desc';
 
+const statusConfig = {
+  approved: { bg: 'bg-green-50',  text: 'text-green-700',  dot: 'bg-green-500',  label: 'Approved' },
+  pending:  { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500', label: 'Pending'  },
+  rejected: { bg: 'bg-red-50',    text: 'text-red-700',    dot: 'bg-red-500',    label: 'Rejected' },
+};
+
+function SortIcon({ active, order }: { active: boolean; order: SortOrder }) {
+  return (
+    <svg className={`w-3 h-3 ml-1 flex-shrink-0 ${active ? 'text-blue-600' : 'text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {order === 'asc' && active
+        ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7"/>
+        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7"/>}
+    </svg>
+  );
+}
+
+const PAGE_SIZE = 10;
+
 export default function AdminInterns() {
+  const navigate = useNavigate();
   const [interns, setInterns] = useState<Intern[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -22,327 +35,266 @@ export default function AdminInterns() {
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    fetchInterns();
-  }, []);
+  useEffect(() => { fetchInterns(); }, []);
+  useEffect(() => { setPage(1); }, [search, statusFilter, departmentFilter]);
 
   const fetchInterns = async () => {
+    setLoading(true);
     try {
-      const params: any = {};
-      if (statusFilter !== 'all') params.status = statusFilter;
-      if (search) params.search = search;
-      
-      const response = await api.getInterns(params);
-      setInterns(response.interns || []);
-    } catch (error) {
-      toast.error('Failed to load interns');
-    } finally {
-      setLoading(false);
-    }
+      const res = await api.getInterns();
+      setInterns((res as any).interns ?? []);
+    } catch { toast.error('Failed to load interns'); }
+    finally { setLoading(false); }
   };
 
-  const handleSearch = () => {
-    fetchInterns();
+  const handleApprove = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try { await api.approveIntern(id); toast.success('Intern approved'); fetchInterns(); }
+    catch { toast.error('Failed to approve intern'); }
   };
 
-  const handleApprove = async (id: number) => {
-    try {
-      await api.approveIntern(id);
-      toast.success('Intern approved successfully');
-      fetchInterns();
-    } catch (error) {
-      toast.error('Failed to approve intern');
-    }
-  };
-
-  const handleReject = async (id: number) => {
-    if (!confirm('Are you sure you want to reject this intern?')) return;
-    
-    try {
-      await api.rejectIntern(id);
-      toast.success('Intern rejected');
-      fetchInterns();
-    } catch (error) {
-      toast.error('Failed to reject intern');
-    }
+  const handleReject = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Reject this intern?')) return;
+    try { await api.rejectIntern(id); toast.success('Intern rejected'); fetchInterns(); }
+    catch { toast.error('Failed to reject intern'); }
   };
 
   const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('asc');
-    }
+    setSortField(field);
+    setSortOrder(sortField === field && sortOrder === 'asc' ? 'desc' : 'asc');
+    setPage(1);
   };
 
-  const exportToCSV = () => {
-    const headers = ['Intern Code', 'First Name', 'Last Name', 'Email', 'Department', 'Position', 'Status', 'Approval', 'Phone'];
-    const rows = filteredAndSortedInterns.map(i => [
-      i.intern_code,
-      i.first_name,
-      i.last_name,
-      i.email,
-      i.department || '',
-      i.position || '',
-      i.user_status,
-      i.approval_status,
-      i.phone || ''
-    ]);
-    
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
+  const exportCSV = () => {
+    const headers = ['Code','First Name','Last Name','Email','Department','Status','Registered'];
+    const rows = processed.map(i => [i.intern_code, i.first_name, i.last_name, i.email ?? '', i.department ?? '', i.approval_status, new Date(i.created_at).toLocaleDateString('en-ZA')]);
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `interns-${new Date().toISOString().split('T')[0]}.csv`;
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = `interns-${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
-    window.URL.revokeObjectURL(url);
-    toast.success('CSV exported successfully');
+    toast.success('CSV exported');
   };
 
-  // Get unique departments for filter
-  const departments = [...new Set(interns.map(i => i.department).filter((d): d is string => !!d))];
+  const departments = [...new Set(interns.map(i => i.department).filter(Boolean))] as string[];
 
-  // Filter and sort interns
-  let filteredAndSortedInterns = interns.filter(intern => {
-    // Status filter
-    if (statusFilter !== 'all' && intern.approval_status !== statusFilter) return false;
-    
-    // Department filter
-    if (departmentFilter !== 'all' && intern.department !== departmentFilter) return false;
-    
-    // Search filter
-    if (search) {
-      const searchLower = search.toLowerCase();
-      return (
-        intern.first_name?.toLowerCase().includes(searchLower) ||
-        intern.last_name?.toLowerCase().includes(searchLower) ||
-        intern.intern_code?.toLowerCase().includes(searchLower) ||
-        intern.email?.toLowerCase().includes(searchLower) ||
-        intern.department?.toLowerCase().includes(searchLower)
-      );
-    }
-    return true;
-  });
+  const processed = interns
+    .filter(i => {
+      if (statusFilter !== 'all' && i.approval_status !== statusFilter) return false;
+      if (departmentFilter !== 'all' && i.department !== departmentFilter) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        return [i.first_name, i.last_name, i.intern_code, i.email, i.department]
+          .some(v => v?.toLowerCase().includes(q));
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'name')            cmp = `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`);
+      else if (sortField === 'intern_code') cmp = (a.intern_code ?? '').localeCompare(b.intern_code ?? '');
+      else if (sortField === 'department')  cmp = (a.department ?? '').localeCompare(b.department ?? '');
+      else if (sortField === 'created_at')  cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      else if (sortField === 'approval_status') cmp = a.approval_status.localeCompare(b.approval_status);
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
 
-  // Sort interns
-  filteredAndSortedInterns.sort((a, b) => {
-    let comparison = 0;
-    switch (sortField) {
-      case 'name':
-        comparison = `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`);
-        break;
-      case 'intern_code':
-        comparison = (a.intern_code || '').localeCompare(b.intern_code || '');
-        break;
-      case 'department':
-        comparison = (a.department || '').localeCompare(b.department || '');
-        break;
-      case 'created_at':
-        comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        break;
-      case 'approval_status':
-        comparison = (a.approval_status || '').localeCompare(b.approval_status || '');
-        break;
-    }
-    return sortOrder === 'asc' ? comparison : -comparison;
-  });
+  const totalPages = Math.max(1, Math.ceil(processed.length / PAGE_SIZE));
+  const paginated = processed.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return <Badge className="bg-green-500">Approved</Badge>;
-      case 'pending':
-        return <Badge variant="outline" className="text-orange-500 border-orange-500">Pending</Badge>;
-      case 'rejected':
-        return <Badge variant="destructive">Rejected</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
-
-  const SortHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
-    <TableHead 
-      className="cursor-pointer hover:bg-slate-50"
-      onClick={() => handleSort(field)}
-    >
-      <div className="flex items-center gap-1">
+  const Th = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
+    <th onClick={() => handleSort(field)}
+      className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none whitespace-nowrap">
+      <span className="flex items-center">
         {children}
-        <ArrowUpDown className={`w-3 h-3 ${sortField === field ? 'text-primary' : 'text-slate-400'}`} />
-      </div>
-    </TableHead>
+        <SortIcon active={sortField === field} order={sortOrder}/>
+      </span>
+    </th>
   );
 
   return (
     <AdminLayout>
       <div className="space-y-6">
+
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">All Interns</h1>
-            <p className="text-slate-600">View and manage all interns in the system</p>
+            <h1 className="text-2xl font-bold text-gray-900">All Interns</h1>
+            <p className="text-gray-500 text-sm mt-1">View, filter and manage all registered interns</p>
           </div>
-          <Button onClick={exportToCSV} variant="outline">
-            <Download className="w-4 h-4 mr-2" />
+          <button onClick={exportCSV}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors flex-shrink-0">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
             Export CSV
-          </Button>
+          </button>
+        </div>
+
+        {/* Summary cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { label:'Total',    value: interns.length,                                  bg:'bg-blue-50',   color:'text-blue-700'   },
+            { label:'Pending',  value: interns.filter(i => i.approval_status==='pending').length,  bg:'bg-orange-50', color:'text-orange-700' },
+            { label:'Approved', value: interns.filter(i => i.approval_status==='approved').length, bg:'bg-green-50',  color:'text-green-700'  },
+            { label:'Rejected', value: interns.filter(i => i.approval_status==='rejected').length, bg:'bg-red-50',    color:'text-red-700'    },
+          ].map(s => (
+            <div key={s.label} className={`${s.bg} rounded-2xl p-4`}>
+              <p className={`text-3xl font-bold ${s.color}`}>{s.value}</p>
+              <p className="text-sm text-gray-500 mt-0.5">{s.label}</p>
+            </div>
+          ))}
         </div>
 
         {/* Filters */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1 flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input
-                    placeholder="Search by name, email, or intern code..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                    className="pl-10"
-                  />
-                </div>
-                <Button onClick={handleSearch}>
-                  <Search className="w-4 h-4" />
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[150px]">
-                    <Filter className="w-4 h-4 mr-2" />
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                  <SelectTrigger className="w-[150px]">
-                    <Filter className="w-4 h-4 mr-2" />
-                    <SelectValue placeholder="Department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Depts</SelectItem>
-                    {departments.map(dept => (
-                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              <input type="text" placeholder="Search by name, email or intern code…" value={search} onChange={e => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">{interns.length}</div>
-              <p className="text-sm text-slate-500">Total Interns</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">{interns.filter(i => i.approval_status === 'pending').length}</div>
-              <p className="text-sm text-slate-500">Pending Approval</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">{interns.filter(i => i.approval_status === 'approved').length}</div>
-              <p className="text-sm text-slate-500">Approved</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">{interns.filter(i => i.user_status === 'active').length}</div>
-              <p className="text-sm text-slate-500">Active</p>
-            </CardContent>
-          </Card>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+              className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-40">
+              <option value="all">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+            <select value={departmentFilter} onChange={e => setDepartmentFilter(e.target.value)}
+              className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-44">
+              <option value="all">All Departments</option>
+              {departments.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
         </div>
 
-        {/* Interns Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Interns ({filteredAndSortedInterns.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-              </div>
-            ) : filteredAndSortedInterns.length === 0 ? (
-              <div className="text-center py-12 text-slate-500">
-                <UserCheck className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                <p>No interns found</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <SortHeader field="intern_code">Intern Code</SortHeader>
-                      <SortHeader field="name">Name</SortHeader>
-                      <TableHead>Email</TableHead>
-                      <SortHeader field="department">Department</SortHeader>
-                      <SortHeader field="approval_status">Status</SortHeader>
-                      <SortHeader field="created_at">Registered</SortHeader>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredAndSortedInterns.map((intern) => (
-                      <TableRow key={intern.id}>
-                        <TableCell className="font-mono">{intern.intern_code}</TableCell>
-                        <TableCell>
-                          {intern.first_name} {intern.last_name}
-                        </TableCell>
-                        <TableCell>{intern.email}</TableCell>
-                        <TableCell>{intern.department || 'N/A'}</TableCell>
-                        <TableCell>{getStatusBadge(intern.approval_status)}</TableCell>
-                        <TableCell>{new Date(intern.created_at).toLocaleDateString()}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => window.location.href = `/admin/interns/${intern.id}`}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
+        {/* Table */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-700">
+              {processed.length} intern{processed.length !== 1 ? 's' : ''}
+              {(search || statusFilter !== 'all' || departmentFilter !== 'all') && <span className="text-gray-400"> (filtered)</span>}
+            </span>
+            <span className="text-xs text-gray-400">Page {page} of {totalPages}</span>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center h-48">
+              <div className="w-10 h-10 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor:'rgba(29,111,164,0.2)', borderTopColor:'#1d6fa4' }}/>
+            </div>
+          ) : paginated.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-gray-300">
+              <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              <p className="text-sm font-medium">{interns.length === 0 ? 'No interns registered yet' : 'No interns match your filter'}</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[700px]">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <Th field="intern_code">Code</Th>
+                    <Th field="name">Name</Th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Email</th>
+                    <Th field="department">Department</Th>
+                    <Th field="approval_status">Status</Th>
+                    <Th field="created_at">Registered</Th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {paginated.map(intern => {
+                    const sc = statusConfig[intern.approval_status as keyof typeof statusConfig] ?? statusConfig.pending;
+                    const initials = `${intern.first_name[0]}${intern.last_name[0]}`.toUpperCase();
+                    return (
+                      <tr key={intern.id} className="hover:bg-gray-50 cursor-pointer transition-colors"
+                        onClick={() => navigate(`/admin/interns/${intern.id}`)}>
+                        <td className="px-4 py-3.5">
+                          <span className="text-xs font-mono font-semibold" style={{ color:'#1d6fa4' }}>{intern.intern_code}</span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                              style={{ background:'linear-gradient(135deg,#1d6fa4,#0e4d7a)' }}>{initials}</div>
+                            <span className="text-sm font-medium text-gray-900 whitespace-nowrap">{intern.first_name} {intern.last_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 hidden md:table-cell">
+                          <span className="text-sm text-gray-500 truncate max-w-[180px] block">{intern.email}</span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className="text-sm text-gray-600">{intern.department ?? '—'}</span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sc.dot}`}/>
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sc.bg} ${sc.text}`}>{sc.label}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className="text-sm text-gray-500 whitespace-nowrap">
+                            {new Date(intern.created_at).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' })}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => navigate(`/admin/interns/${intern.id}`)}
+                              className="px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors"
+                              style={{ color:'#1d6fa4', background:'rgba(29,111,164,0.08)' }}>
+                              View
+                            </button>
                             {intern.approval_status === 'pending' && (
                               <>
-                                <Button 
-                                  variant="default" 
-                                  size="sm"
-                                  onClick={() => handleApprove(intern.id)}
-                                >
-                                  <UserCheck className="w-4 h-4" />
-                                </Button>
-                                <Button 
-                                  variant="destructive" 
-                                  size="sm"
-                                  onClick={() => handleReject(intern.id)}
-                                >
-                                  <UserX className="w-4 h-4" />
-                                </Button>
+                                <button onClick={e => handleApprove(intern.id, e)}
+                                  className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors">
+                                  ✓
+                                </button>
+                                <button onClick={e => handleReject(intern.id, e)}
+                                  className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
+                                  ✕
+                                </button>
                               </>
                             )}
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
+              <span className="text-xs text-gray-400">
+                Showing {((page-1)*PAGE_SIZE)+1}–{Math.min(page*PAGE_SIZE, processed.length)} of {processed.length}
+              </span>
+              <div className="flex gap-1">
+                <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-50 border border-gray-200 text-gray-600 disabled:opacity-40 hover:bg-white transition-colors">
+                  ← Prev
+                </button>
+                {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                  const p = totalPages <= 5 ? i+1 : page <= 3 ? i+1 : page >= totalPages-2 ? totalPages-4+i : page-2+i;
+                  return (
+                    <button key={p} onClick={() => setPage(p)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${page === p ? 'text-white' : 'bg-gray-50 border border-gray-200 text-gray-600 hover:bg-white'}`}
+                      style={page === p ? { background:'linear-gradient(135deg,#1d6fa4,#0e4d7a)' } : {}}>
+                      {p}
+                    </button>
+                  );
+                })}
+                <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page === totalPages}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-50 border border-gray-200 text-gray-600 disabled:opacity-40 hover:bg-white transition-colors">
+                  Next →
+                </button>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          )}
+        </div>
       </div>
     </AdminLayout>
   );
