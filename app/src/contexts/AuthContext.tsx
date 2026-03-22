@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type { User } from '@/types';
+import { api } from '@/services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -91,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.ok) {
         const data = await response.json();
         storage.set('user', JSON.stringify(data.user));
+        if (token) api.setToken(token);  // re-sync on page refresh
         setUser(data.user);
       } else {
         storage.clear();
@@ -184,6 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       storage.set('sessionToken', data.sessionToken);
       storage.set('user', JSON.stringify(data.user));
 
+      api.setToken(data.token);  // sync token into api singleton
       setToken(data.token);
       setSessionToken(data.sessionToken);
       setUser(data.user);
@@ -220,6 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     storage.clear();
+    api.clearToken();  // clear token from api singleton
     setToken(null);
     setSessionToken(null);
     setUser(null);

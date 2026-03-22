@@ -1,321 +1,370 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { AdminLayout } from '@/components/layouts/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, UserCheck, UserX, Calendar, Clock, MapPin, FileText, Briefcase } from 'lucide-react';
 import { api } from '@/services/api';
 import type { Intern, Task, LoginLog, FileItem } from '@/types';
 import { toast } from 'sonner';
 
+type Tab = 'overview' | 'tasks' | 'files' | 'logins';
+
+const statusConfig = {
+  approved: { bg:'bg-green-50', text:'text-green-700', dot:'bg-green-500', label:'Approved' },
+  pending:  { bg:'bg-orange-50', text:'text-orange-700', dot:'bg-orange-500', label:'Pending' },
+  rejected: { bg:'bg-red-50', text:'text-red-700', dot:'bg-red-500', label:'Rejected' },
+};
+
+const taskStatus = {
+  completed:   { bg:'bg-green-50',  text:'text-green-700'  },
+  in_progress: { bg:'bg-blue-50',   text:'text-blue-700'   },
+  pending:     { bg:'bg-orange-50', text:'text-orange-700' },
+  cancelled:   { bg:'bg-gray-100',  text:'text-gray-500'   },
+};
+
+function formatSize(b: number) {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024*1024) return `${(b/1024).toFixed(1)} KB`;
+  return `${(b/1024/1024).toFixed(1)} MB`;
+}
+
+function duration(login: string, logout?: string) {
+  if (!logout) return 'Active';
+  const diff = new Date(logout).getTime() - new Date(login).getTime();
+  const h = Math.floor(diff / 3600000), m = Math.floor((diff % 3600000) / 60000);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function InfoItem({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
+      <p className="text-sm font-medium text-gray-900 mt-1">{value || '—'}</p>
+    </div>
+  );
+}
+
 export default function AdminInternDetails() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [intern, setIntern] = useState<Intern | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loginLogs, setLoginLogs] = useState<LoginLog[]>([]);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
 
-  useEffect(() => {
-    if (id) {
-      fetchInternDetails();
-    }
-  }, [id]);
-
-  const fetchInternDetails = async () => {
+  const load = async () => {
+    setLoading(true);
     try {
-      const response = await api.getInternDetails(parseInt(id!));
-      setIntern(response.intern);
-      setTasks(response.tasks);
-      setLoginLogs(response.loginLogs);
-      setFiles(response.files);
-    } catch (error) {
-      toast.error('Failed to load intern details');
-    } finally {
-      setLoading(false);
-    }
+      const res = await api.getInternDetails(parseInt(id!)) as any;
+      setIntern(res.intern);
+      setTasks(res.tasks ?? []);
+      setLoginLogs(res.loginLogs ?? []);
+      setFiles(res.files ?? []);
+    } catch { toast.error('Failed to load intern details'); }
+    finally { setLoading(false); }
   };
 
+  useEffect(() => { if (id) load(); }, [id]);
+
   const handleApprove = async () => {
-    try {
-      await api.approveIntern(parseInt(id!));
-      toast.success('Intern approved successfully');
-      fetchInternDetails();
-    } catch (error) {
-      toast.error('Failed to approve intern');
-    }
+    try { await api.approveIntern(parseInt(id!)); toast.success('Intern approved'); load(); }
+    catch { toast.error('Failed to approve intern'); }
   };
 
   const handleReject = async () => {
-    if (!confirm('Are you sure you want to reject this intern?')) return;
-    
-    try {
-      await api.rejectIntern(parseInt(id!));
-      toast.success('Intern rejected');
-      fetchInternDetails();
-    } catch (error) {
-      toast.error('Failed to reject intern');
-    }
+    if (!confirm('Reject this intern application?')) return;
+    try { await api.rejectIntern(parseInt(id!)); toast.success('Intern rejected'); load(); }
+    catch { toast.error('Failed to reject intern'); }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return <Badge className="bg-green-500">Approved</Badge>;
-      case 'pending':
-        return <Badge variant="outline" className="text-orange-500 border-orange-500">Pending</Badge>;
-      case 'rejected':
-        return <Badge variant="destructive">Rejected</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
+  if (loading) return (
+    <AdminLayout>
+      <div className="flex items-center justify-center h-64">
+        <div className="w-10 h-10 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor:'rgba(29,111,164,0.2)', borderTopColor:'#1d6fa4' }}/>
+      </div>
+    </AdminLayout>
+  );
 
-  if (loading) {
-    return (
-      <AdminLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
-      </AdminLayout>
-    );
-  }
+  if (!intern) return (
+    <AdminLayout>
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <p className="text-gray-500">Intern not found.</p>
+        <button onClick={() => navigate('/admin/interns')} className="text-sm font-medium" style={{ color:'#1d6fa4' }}>← Back to Interns</button>
+      </div>
+    </AdminLayout>
+  );
 
-  if (!intern) {
-    return (
-      <AdminLayout>
-        <div className="text-center py-12">
-          <p className="text-slate-500">Intern not found</p>
-          <Button className="mt-4" onClick={() => window.location.href = '/admin/interns'}>
-            Back to Interns
-          </Button>
-        </div>
-      </AdminLayout>
-    );
-  }
+  const sc = statusConfig[intern.approval_status as keyof typeof statusConfig] ?? statusConfig.pending;
+  const age = intern.date_of_birth ? Math.floor((Date.now() - new Date(intern.date_of_birth).getTime()) / (365.25*24*60*60*1000)) : null;
+  const totalHours = tasks.reduce((s, t) => s + (t.hours_spent ?? 0), 0);
+  const completedTasks = tasks.filter(t => t.status === 'completed').length;
+  const tabs: { id: Tab; label: string; count?: number }[] = [
+    { id:'overview', label:'Overview' },
+    { id:'tasks',    label:'Tasks',  count: tasks.length },
+    { id:'files',    label:'Files',  count: files.length },
+    { id:'logins',   label:'Logins', count: loginLogs.length },
+  ];
 
   return (
     <AdminLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="icon" onClick={() => window.location.href = '/admin/interns'}>
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold">
-                {intern.first_name} {intern.last_name}
-              </h1>
-              <p className="text-slate-600">
-                {intern.intern_code} • {getStatusBadge(intern.approval_status)}
-              </p>
+
+        {/* Back + header */}
+        <div>
+          <button onClick={() => navigate('/admin/interns')} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-4 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+            Back to Interns
+          </button>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="h-20 relative" style={{ background:'linear-gradient(135deg,#0a1628,#0d2044,#0e3060)' }}>
+              <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage:'linear-gradient(rgba(255,255,255,.8) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.8) 1px,transparent 1px)', backgroundSize:'32px 32px' }}/>
+            </div>
+            <div className="px-6 pb-6">
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-8">
+                <div className="flex items-end gap-4">
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-xl font-bold border-4 border-white shadow-lg flex-shrink-0"
+                    style={{ background:'linear-gradient(135deg,#1d6fa4,#0e4d7a)' }}>
+                    {intern.first_name[0]}{intern.last_name[0]}
+                  </div>
+                  <div className="pb-1">
+                    <h1 className="text-xl font-bold text-gray-900">{intern.first_name} {intern.last_name}</h1>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className="text-xs font-mono font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{intern.intern_code}</span>
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${sc.bg} ${sc.text}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`}/>{sc.label}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {intern.approval_status === 'pending' && (
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button onClick={handleReject} className="px-4 py-2 text-sm font-semibold rounded-xl bg-red-50 text-red-700 hover:bg-red-100 transition-colors">Reject</button>
+                    <button onClick={handleApprove} className="px-4 py-2 text-sm font-semibold rounded-xl text-white hover:opacity-90 transition-opacity" style={{ background:'linear-gradient(135deg,#1d6fa4,#0e4d7a)' }}>✓ Approve</button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-          {intern.approval_status === 'pending' && (
-            <div className="flex gap-2">
-              <Button onClick={handleApprove}>
-                <UserCheck className="w-4 h-4 mr-2" />
-                Approve
-              </Button>
-              <Button variant="destructive" onClick={handleReject}>
-                <UserX className="w-4 h-4 mr-2" />
-                Reject
-              </Button>
-            </div>
-          )}
         </div>
 
-        {/* Basic Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Personal Information</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <h4 className="text-sm font-medium text-slate-500 mb-2">Contact</h4>
-                <div className="space-y-1">
-                  <p><span className="text-slate-500">Email:</span> {intern.email}</p>
-                  <p><span className="text-slate-500">Phone:</span> {intern.phone || 'N/A'}</p>
-                  <p><span className="text-slate-500">SA ID:</span> {intern.sa_id}</p>
+        {/* Tabs */}
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-2xl overflow-x-auto">
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setActiveTab(t.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all flex-1 justify-center ${activeTab === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              {t.label}
+              {t.count !== undefined && <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${activeTab === t.id ? 'bg-gray-100 text-gray-700' : 'bg-gray-200 text-gray-500'}`}>{t.count}</span>}
+            </button>
+          ))}
+        </div>
+
+        {/* Overview */}
+        {activeTab === 'overview' && (
+          <div className="space-y-5">
+            {/* Quick stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[
+                { label:'Total Tasks',     value: tasks.length,         bg:'bg-blue-50',   color:'text-blue-700'   },
+                { label:'Completed',       value: completedTasks,       bg:'bg-green-50',  color:'text-green-700'  },
+                { label:'Total Hours',     value: totalHours % 1 === 0 ? totalHours : totalHours.toFixed(1), bg:'bg-purple-50', color:'text-purple-700' },
+                { label:'Login Sessions',  value: loginLogs.length,     bg:'bg-orange-50', color:'text-orange-700' },
+              ].map(s => (
+                <div key={s.label} className={`${s.bg} rounded-2xl p-4`}>
+                  <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Personal info */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h2 className="text-base font-semibold text-gray-900 mb-4">Personal Information</h2>
+                <div className="grid grid-cols-2 gap-4">
+                  <InfoItem label="Email" value={intern.email}/>
+                  <InfoItem label="Phone" value={intern.phone}/>
+                  <InfoItem label="SA ID" value={intern.sa_id}/>
+                  <InfoItem label="Date of Birth" value={intern.date_of_birth ? new Date(intern.date_of_birth).toLocaleDateString('en-ZA') : undefined}/>
+                  <InfoItem label="Age" value={age ? `${age} years` : undefined}/>
+                  <InfoItem label="Gender" value={intern.gender}/>
+                  <InfoItem label="Citizenship" value={intern.citizenship}/>
+                  <InfoItem label="Registered" value={intern.created_at ? new Date(intern.created_at).toLocaleDateString('en-ZA') : undefined}/>
                 </div>
               </div>
-              <div>
-                <h4 className="text-sm font-medium text-slate-500 mb-2">ID Information</h4>
-                <div className="space-y-1">
-                  <p><span className="text-slate-500">Date of Birth:</span> {new Date(intern.date_of_birth).toLocaleDateString()}</p>
-                  <p><span className="text-slate-500">Gender:</span> {intern.gender}</p>
-                  <p><span className="text-slate-500">Citizenship:</span> {intern.citizenship}</p>
+
+              {/* Work + address */}
+              <div className="space-y-5">
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                  <h2 className="text-base font-semibold text-gray-900 mb-4">Work Information</h2>
+                  <div className="grid grid-cols-2 gap-4">
+                    <InfoItem label="Department" value={intern.department}/>
+                    <InfoItem label="Position" value={intern.position}/>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <h4 className="text-sm font-medium text-slate-500 mb-2">Work Information</h4>
-                <div className="space-y-1">
-                  <p><span className="text-slate-500">Department:</span> {intern.department || 'N/A'}</p>
-                  <p><span className="text-slate-500">Position:</span> {intern.position || 'N/A'}</p>
-                  <p><span className="text-slate-500">Registered:</span> {new Date(intern.created_at).toLocaleDateString()}</p>
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                  <h2 className="text-base font-semibold text-gray-900 mb-4">Address</h2>
+                  <div className="grid grid-cols-2 gap-4">
+                    <InfoItem label="Address" value={intern.address}/>
+                    <InfoItem label="City" value={intern.city}/>
+                    <InfoItem label="Province" value={intern.province}/>
+                    <InfoItem label="Postal Code" value={intern.postal_code}/>
+                  </div>
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Tabs */}
-        <Tabs defaultValue="tasks" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="tasks">
-              <Briefcase className="w-4 h-4 mr-2" />
-              Tasks ({tasks.length})
-            </TabsTrigger>
-            <TabsTrigger value="logins">
-              <MapPin className="w-4 h-4 mr-2" />
-              Login History ({loginLogs.length})
-            </TabsTrigger>
-            <TabsTrigger value="files">
-              <FileText className="w-4 h-4 mr-2" />
-              Files ({files.length})
-            </TabsTrigger>
-          </TabsList>
+            {/* Emergency contact */}
+            {(intern.emergency_contact_name || intern.emergency_contact_phone) && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h2 className="text-base font-semibold text-gray-900 mb-4">Emergency Contact</h2>
+                <div className="grid grid-cols-2 gap-4">
+                  <InfoItem label="Contact Name" value={intern.emergency_contact_name}/>
+                  <InfoItem label="Contact Phone" value={intern.emergency_contact_phone}/>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
-          <TabsContent value="tasks">
-            <Card>
-              <CardHeader>
-                <CardTitle>Tasks</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {tasks.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500">
-                    <Briefcase className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                    <p>No tasks logged yet</p>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Title</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Hours</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {tasks.map((task) => (
-                        <TableRow key={task.id}>
-                          <TableCell>{new Date(task.task_date).toLocaleDateString()}</TableCell>
-                          <TableCell>{task.title}</TableCell>
-                          <TableCell>
-                            <Badge variant={task.status === 'completed' ? 'default' : 'secondary'}>
-                              {task.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{task.hours_spent || '-'}</TableCell>
-                        </TableRow>
+        {/* Tasks */}
+        {activeTab === 'tasks' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            {tasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-gray-300">
+                <span className="text-5xl mb-3">📋</span>
+                <p className="text-sm font-medium text-gray-400">No tasks logged yet</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[540px]">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      {['Date','Title','Status','Hours'].map(h => (
+                        <th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
                       ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {tasks.map(task => {
+                      const ts = taskStatus[task.status as keyof typeof taskStatus] ?? taskStatus.pending;
+                      return (
+                        <tr key={task.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-5 py-3.5 text-sm text-gray-500 whitespace-nowrap">
+                            {new Date(task.task_date).toLocaleDateString('en-ZA', { day:'numeric', month:'short' })}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <p className="text-sm font-medium text-gray-900">{task.title}</p>
+                            {task.description && <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{task.description}</p>}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${ts.bg} ${ts.text}`}>{task.status.replace('_',' ')}</span>
+                          </td>
+                          <td className="px-5 py-3.5 text-sm text-gray-600">{task.hours_spent ? `${task.hours_spent}h` : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
-          <TabsContent value="logins">
-            <Card>
-              <CardHeader>
-                <CardTitle>Login History</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loginLogs.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500">
-                    <MapPin className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                    <p>No login history available</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {loginLogs.map((log) => (
-                      <div key={log.id} className="p-4 border rounded-lg">
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                          <div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <Calendar className="w-4 h-4 text-slate-400" />
-                              <span>{new Date(log.login_time).toLocaleDateString()}</span>
-                              <Clock className="w-4 h-4 text-slate-400 ml-2" />
-                              <span>{new Date(log.login_time).toLocaleTimeString()}</span>
-                              {!log.logout_time && (
-                                <Badge className="bg-green-500">Active</Badge>
-                              )}
-                            </div>
-                            <p className="text-sm text-slate-500">
-                              {log.browser} on {log.os}
-                            </p>
-                            <p className="text-sm text-slate-500">IP: {log.ip_address}</p>
-                          </div>
-                          {log.login_latitude && (
-                            <div className="text-sm">
-                              <p className="font-mono text-slate-600">
-                                Lat: {log.login_latitude.toFixed(6)}
-                              </p>
-                              <p className="font-mono text-slate-600">
-                                Lng: {log.login_longitude?.toFixed(6)}
-                              </p>
-                              {log.login_accuracy && (
-                                <p className="text-xs text-slate-500">
-                                  Accuracy: ±{Math.round(log.login_accuracy)}m
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
+        {/* Files */}
+        {activeTab === 'files' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            {files.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-gray-300">
+                <span className="text-5xl mb-3">📁</span>
+                <p className="text-sm font-medium text-gray-400">No files uploaded yet</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[500px]">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      {['File Name','Category','Size','Uploaded'].map(h => (
+                        <th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {files.map(file => (
+                      <tr key={file.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-5 py-3.5">
+                          <p className="text-sm font-medium text-gray-900 truncate max-w-xs">{file.original_name}</p>
+                          <p className="text-xs text-gray-400">{file.file_type}</p>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 capitalize">{file.category ?? 'general'}</span>
+                        </td>
+                        <td className="px-5 py-3.5 text-sm text-gray-500">{formatSize(file.file_size)}</td>
+                        <td className="px-5 py-3.5 text-sm text-gray-500 whitespace-nowrap">
+                          {new Date(file.uploaded_at).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' })}
+                        </td>
+                      </tr>
                     ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
-          <TabsContent value="files">
-            <Card>
-              <CardHeader>
-                <CardTitle>Files</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {files.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500">
-                    <FileText className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                    <p>No files uploaded yet</p>
+        {/* Logins */}
+        {activeTab === 'logins' && (
+          <div className="space-y-3">
+            {loginLogs.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-16 text-gray-300">
+                <span className="text-5xl mb-3">🔑</span>
+                <p className="text-sm font-medium text-gray-400">No login records</p>
+              </div>
+            ) : loginLogs.map((log, index) => {
+              const isActive = !log.logout_time;
+              const dur = duration(log.login_time, log.logout_time);
+              return (
+                <div key={log.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}/>
+                      <span className="text-sm font-semibold text-gray-800">Session #{loginLogs.length - index}</span>
+                    </div>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isActive ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      {isActive ? 'Active' : dur}
+                    </span>
                   </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead>Size</TableHead>
-                        <TableHead>Uploaded</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {files.map((file) => (
-                        <TableRow key={file.id}>
-                          <TableCell>{file.original_name}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{file.category || 'general'}</Badge>
-                          </TableCell>
-                          <TableCell>{(file.file_size / 1024).toFixed(1)} KB</TableCell>
-                          <TableCell>{new Date(file.uploaded_at).toLocaleDateString()}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <p className="text-xs text-gray-400">Date</p>
+                      <p className="text-sm font-medium text-gray-800">{new Date(log.login_time).toLocaleDateString('en-ZA', { day:'numeric', month:'short' })}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Login</p>
+                      <p className="text-sm font-medium text-gray-800">{new Date(log.login_time).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Device</p>
+                      <p className="text-sm font-medium text-gray-800 truncate">{log.browser ?? '—'} / {log.os ?? '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">IP</p>
+                      <p className="text-sm font-mono text-gray-600">{log.ip_address ?? '—'}</p>
+                    </div>
+                  </div>
+                  {log.login_latitude && (
+                    <div className="mt-3 pt-3 border-t border-gray-50 flex items-center gap-2 text-xs text-gray-500">
+                      <span>📍 GPS:</span>
+                      <span className="font-mono">{log.login_latitude.toFixed(5)}, {log.login_longitude?.toFixed(5)}</span>
+                      <a href={`https://www.google.com/maps?q=${log.login_latitude},${log.login_longitude}`} target="_blank" rel="noreferrer"
+                        className="ml-auto font-medium hover:underline" style={{ color:'#1d6fa4' }}>View on map →</a>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </AdminLayout>
   );
