@@ -125,13 +125,11 @@ export default function InternLoginPage() {
             </form>
 
             <div className="mt-6 space-y-3">
-              <div className="p-3 bg-green-50 rounded-lg text-xs text-slate-600">
-                <p className="font-medium mb-1">Demo Credentials (for testing):</p>
-                <p className="font-mono">intern@example.com</p>
-                <p className="font-mono">Intern@123</p>
-                <p className="mt-2 text-green-600 text-[10px]">
-                  Note: Backend server is not running on this deployment. Use demo credentials to see the UI.
-                </p>
+              <div className="p-3 bg-green-50 rounded-lg text-xs text-slate-600 space-y-1">
+                <p className="font-medium">Test Credentials:</p>
+                <p className="font-mono text-green-800">intern@eullafied.co.za</p>
+                <p className="font-mono text-green-800">Intern@123</p>
+                <p className="mt-1 text-slate-400 text-[10px]">Make sure the server is running: npm run server</p>
               </div>
 
               <div className="text-center">
