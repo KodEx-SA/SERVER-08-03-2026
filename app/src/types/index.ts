@@ -97,8 +97,18 @@ export interface DashboardStats {
   totalInterns: number;
   pendingApprovals: number;
   approvedInterns: number;
+  rejectedInterns: number;
   todayLogins: number;
   tasksToday: number;
+  totalAdmins: number;
+  openTickets: number;
+  totalTickets: number;
+  totalDepartments: number;
+}
+
+export interface LoginTrendPoint {
+  date: string;
+  count: number;
 }
 
 export interface GPSLocation {
