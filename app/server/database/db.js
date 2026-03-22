@@ -173,12 +173,12 @@ function createDefaultSuperAdmin() {
     db.prepare(`INSERT INTO users (email,password,role,status) VALUES (?,?,?,?)`).run(
       'superadmin@internsystem.com', hash, 'super_admin', 'active'
     );
-    console.warn('=================================================');
-    console.warn('⚠  Default super admin created:');
-    console.warn('   Email: superadmin@internsystem.com');
-    console.warn('   Password: Admin@123');
-    console.warn('   CHANGE THIS PASSWORD IMMEDIATELY AFTER FIRST LOGIN');
-    console.warn('=================================================');
+    // console.warn('=================================================');
+    // console.warn('⚠  Default super admin created:');
+    // console.warn('   Email: superadmin@internsystem.com');
+    // console.warn('   Password: Admin@123');
+    // console.warn('   CHANGE THIS PASSWORD IMMEDIATELY AFTER FIRST LOGIN');
+    // console.warn('=================================================');
   }
 }
 
@@ -225,12 +225,12 @@ function seedTestIntern() {
     'approved'
   );
 
-  console.warn('=================================================');
-  console.warn('\u2705  Test intern created:');
-  console.warn('   Email: intern@eullafied.co.za');
-  console.warn('   Password: Intern@123');
-  console.warn('   CHANGE THIS PASSWORD OR DELETE BEFORE PRODUCTION');
-  console.warn('=================================================');
+  // console.warn('=================================================');
+  // console.warn('\u2705  Test intern created:');
+  // console.warn('   Email: intern@eullafied.co.za');
+  // console.warn('   Password: Intern@123');
+  // console.warn('   CHANGE THIS PASSWORD OR DELETE BEFORE PRODUCTION');
+  // console.warn('=================================================');
 }
 
 initDatabase();

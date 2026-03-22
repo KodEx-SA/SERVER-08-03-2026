@@ -221,11 +221,25 @@ router.get('/admins', authenticateToken, requireSuperAdmin, (req, res) => {
 // Get dashboard statistics
 router.get('/dashboard-stats', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const totalInterns = db.prepare('SELECT COUNT(*) as count FROM interns').get().count;
-    const pendingApprovals = db.prepare(`SELECT COUNT(*) as count FROM interns WHERE approval_status = 'pending'`).get().count;
-    const approvedInterns = db.prepare(`SELECT COUNT(*) as count FROM interns WHERE approval_status = 'approved'`).get().count;
-    const todayLogins = db.prepare(`SELECT COUNT(*) as count FROM login_logs WHERE DATE(login_time) = DATE('now')`).get().count;
-    const tasksToday = db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE DATE(task_date) = DATE('now')`).get().count;
+    const totalInterns     = db.prepare("SELECT COUNT(*) as count FROM interns").get().count;
+    const pendingApprovals = db.prepare("SELECT COUNT(*) as count FROM interns WHERE approval_status = 'pending'").get().count;
+    const approvedInterns  = db.prepare("SELECT COUNT(*) as count FROM interns WHERE approval_status = 'approved'").get().count;
+    const rejectedInterns  = db.prepare("SELECT COUNT(*) as count FROM interns WHERE approval_status = 'rejected'").get().count;
+    const todayLogins      = db.prepare("SELECT COUNT(*) as count FROM login_logs WHERE DATE(login_time) = DATE('now')").get().count;
+    const tasksToday       = db.prepare("SELECT COUNT(*) as count FROM tasks WHERE DATE(task_date) = DATE('now')").get().count;
+    const totalAdmins      = db.prepare("SELECT COUNT(*) as count FROM users WHERE role IN ('admin','super_admin')").get().count;
+    const openTickets      = db.prepare("SELECT COUNT(*) as count FROM tickets WHERE status = 'open'").get().count || 0;
+    const totalTickets     = db.prepare("SELECT COUNT(*) as count FROM tickets").get().count || 0;
+    const totalDepartments = db.prepare("SELECT COUNT(*) as count FROM departments WHERE is_active = 1").get().count || 0;
+
+    // Login trend — last 7 days
+    const loginTrend = db.prepare(`
+      SELECT DATE(login_time) as date, COUNT(*) as count
+      FROM login_logs
+      WHERE login_time >= DATE('now', '-6 days')
+      GROUP BY DATE(login_time)
+      ORDER BY date ASC
+    `).all();
 
     const recentActivities = db.prepare(`
       SELECT al.*, u.email, i.first_name, i.last_name
@@ -236,7 +250,11 @@ router.get('/dashboard-stats', authenticateToken, requireAdmin, (req, res) => {
     `).all();
 
     res.json({
-      stats: { totalInterns, pendingApprovals, approvedInterns, todayLogins, tasksToday },
+      stats: {
+        totalInterns, pendingApprovals, approvedInterns, rejectedInterns,
+        todayLogins, tasksToday, totalAdmins, openTickets, totalTickets, totalDepartments,
+      },
+      loginTrend,
       recentActivities,
     });
 
