@@ -196,8 +196,46 @@ function seedDepartments() {
   ].forEach(([n, d, h]) => insert.run(n, d, h));
 }
 
+
+function seedTestIntern() {
+  const existing = db.prepare("SELECT id FROM users WHERE role = 'intern'").get();
+  if (existing) return;
+
+  const hash = bcrypt.hashSync('Intern@123', 10);
+
+  const userId = db.prepare(
+    "INSERT INTO users (email, password, role, status) VALUES (?,?,?,?)"
+  ).run('intern@eullafied.co.za', hash, 'intern', 'active').lastInsertRowid;
+
+  const year = new Date().getFullYear();
+  const internCode = `INT-${year}-TEST1`;
+
+  db.prepare(`
+    INSERT INTO interns (
+      user_id, intern_code, first_name, last_name, sa_id,
+      date_of_birth, gender, citizenship, department, position,
+      approval_status
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    userId, internCode,
+    'Ashley', 'Test',
+    '9001010001089',
+    '1990-01-01', 'Male', 'South African Citizen',
+    'IT Support', 'Software Developer Intern',
+    'approved'
+  );
+
+  console.warn('=================================================');
+  console.warn('\u2705  Test intern created:');
+  console.warn('   Email: intern@eullafied.co.za');
+  console.warn('   Password: Intern@123');
+  console.warn('   CHANGE THIS PASSWORD OR DELETE BEFORE PRODUCTION');
+  console.warn('=================================================');
+}
+
 initDatabase();
 createDefaultSuperAdmin();
 seedDepartments();
+seedTestIntern();
 
 export default db;
