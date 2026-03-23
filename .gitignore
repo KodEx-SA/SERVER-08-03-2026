@@ -1,2 +1,3 @@
-.env.example
-.env
+
+app/.env
+app/.env.example
