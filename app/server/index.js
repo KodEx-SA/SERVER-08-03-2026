@@ -9,6 +9,7 @@ import internRoutes      from './routes/intern.js';
 import fileRoutes        from './routes/files.js';
 import departmentRoutes  from './routes/departments.js';
 import ticketRoutes      from './routes/tickets.js';
+import profileRoutes     from './routes/profile.js';
 
 import './database/db.js';
 
@@ -39,6 +40,7 @@ app.use('/api/intern',      internRoutes);
 app.use('/api/files',       fileRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/tickets',     ticketRoutes);
+app.use('/api/profile',     profileRoutes);
 
 // Health check
 app.get('/api/health', (req, res) =>

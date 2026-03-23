@@ -117,32 +117,32 @@ export default function AdminInternDetails() {
           </button>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="h-20 relative" style={{ background:'linear-gradient(135deg,#0a1628,#0d2044,#0e3060)' }}>
+            <div className="h-28 relative" style={{ background:'linear-gradient(135deg,#0a1628,#0d2044,#0e3060)' }}>
               <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage:'linear-gradient(rgba(255,255,255,.8) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.8) 1px,transparent 1px)', backgroundSize:'32px 32px' }}/>
             </div>
             <div className="px-6 pb-6">
-              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-8">
-                <div className="flex items-end gap-4">
-                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-xl font-bold border-4 border-white shadow-lg flex-shrink-0"
-                    style={{ background:'linear-gradient(135deg,#1d6fa4,#0e4d7a)' }}>
-                    {intern.first_name[0]}{intern.last_name[0]}
-                  </div>
-                  <div className="pb-1">
-                    <h1 className="text-xl font-bold text-gray-900">{intern.first_name} {intern.last_name}</h1>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      <span className="text-xs font-mono font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{intern.intern_code}</span>
-                      <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${sc.bg} ${sc.text}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`}/>{sc.label}
-                      </span>
-                    </div>
-                  </div>
+              {/* Avatar — overlaps banner only */}
+              <div className="-mt-8 mb-3 flex items-end justify-between gap-4">
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-xl font-bold border-4 border-white shadow-lg flex-shrink-0"
+                  style={{ background:'linear-gradient(135deg,#1d6fa4,#0e4d7a)' }}>
+                  {intern.first_name[0]}{intern.last_name[0]}
                 </div>
                 {intern.approval_status === 'pending' && (
-                  <div className="flex gap-2 flex-shrink-0">
+                  <div className="flex gap-2 flex-shrink-0 self-end">
                     <button onClick={handleReject} className="px-4 py-2 text-sm font-semibold rounded-xl bg-red-50 text-red-700 hover:bg-red-100 transition-colors">Reject</button>
                     <button onClick={handleApprove} className="px-4 py-2 text-sm font-semibold rounded-xl text-white hover:opacity-90 transition-opacity" style={{ background:'linear-gradient(135deg,#1d6fa4,#0e4d7a)' }}>✓ Approve</button>
                   </div>
                 )}
+              </div>
+              {/* Name and status — safely below banner */}
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">{intern.first_name} {intern.last_name}</h1>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <span className="text-xs font-mono font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{intern.intern_code}</span>
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${sc.bg} ${sc.text}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`}/>{sc.label}
+                  </span>
+                </div>
               </div>
             </div>
           </div>

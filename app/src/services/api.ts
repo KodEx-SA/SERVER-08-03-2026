@@ -156,6 +156,23 @@ class ApiService {
   }
   async deleteFile(id: number) { return this.request(`/files/${id}`, { method: 'DELETE' }); }
 
+  // ── Profile image ─────────────────────────────────────────────────────────
+  async uploadAvatar(file: File) {
+    if (IS_DEMO_MODE) return Promise.resolve({ message: 'Demo mode', imageUrl: '' });
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const resp = await fetch(`${API_URL}/profile/avatar`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${this.token}` },
+      body: formData,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(err.error || 'Upload failed');
+    }
+    return resp.json();
+  }
+
   // ── Departments ──────────────────────────────────────────────────────────────
   async getDepartments()                                   { return this.request('/departments'); }
   async getDepartment(id: number)                          { return this.request(`/departments/${id}`); }

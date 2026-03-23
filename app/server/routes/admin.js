@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin, requireSuperAdmin, logActivity } from '../middleware/auth.js';
+import { notifyInternApproved, notifyInternRejected, notifyTicketUpdated } from '../utils/emailService.js';
 
 const router = express.Router();
 
@@ -76,7 +77,7 @@ router.get('/interns/:id', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // Approve intern
-router.post('/interns/:id/approve', authenticateToken, requireAdmin, (req, res) => {
+router.post('/interns/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const intern = db.prepare('SELECT * FROM interns WHERE id = ?').get(id);
@@ -95,6 +96,18 @@ router.post('/interns/:id/approve', authenticateToken, requireAdmin, (req, res) 
     const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     logActivity(req.user.id, 'INTERN_APPROVED', { internId: id }, ipAddress);
 
+    // Email the intern
+    try {
+      const internUser = db.prepare('SELECT u.email FROM users u JOIN interns i ON u.id = i.user_id WHERE i.id = ?').get(id);
+      if (internUser) {
+        await notifyInternApproved({
+          internEmail: internUser.email,
+          firstName: intern.first_name,
+          internCode: intern.intern_code,
+        });
+      }
+    } catch (emailErr) { console.warn('Approve email failed:', emailErr.message); }
+
     res.json({ message: 'Intern approved successfully' });
 
   } catch (error) {
@@ -104,7 +117,7 @@ router.post('/interns/:id/approve', authenticateToken, requireAdmin, (req, res) 
 });
 
 // Reject intern
-router.post('/interns/:id/reject', authenticateToken, requireAdmin, (req, res) => {
+router.post('/interns/:id/reject', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const intern = db.prepare('SELECT * FROM interns WHERE id = ?').get(id);
@@ -116,6 +129,14 @@ router.post('/interns/:id/reject', authenticateToken, requireAdmin, (req, res) =
 
     const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     logActivity(req.user.id, 'INTERN_REJECTED', { internId: id }, ipAddress);
+
+    // Email the intern
+    try {
+      const internUser = db.prepare('SELECT u.email, i.first_name FROM users u JOIN interns i ON u.id = i.user_id WHERE i.id = ?').get(id);
+      if (internUser) {
+        await notifyInternRejected({ internEmail: internUser.email, firstName: internUser.first_name });
+      }
+    } catch (emailErr) { console.warn('Reject email failed:', emailErr.message); }
 
     res.json({ message: 'Intern rejected' });
 
