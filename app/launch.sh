@@ -101,14 +101,33 @@ fi
 stop_servers 2>/dev/null
 mkdir -p "$LOG_DIR"
 
-# ── Start backend ──────────────────────────────────────────────────
+# ── Start frontend first so we know its port ──────────────────────
 echo ""
 echo -e "${BOLD}Starting servers...${RESET}"
 
 cd "$APP_DIR"
-node --env-file=.env server/index.js > "$SERVER_LOG" 2>&1 &
+npm run dev > "$CLIENT_LOG" 2>&1 &
+CLIENT_PID=$!
+
+# Wait up to 8s for Vite to pick a port
+CLIENT_READY=false
+CLIENT_URL="http://localhost:5173"
+for i in {1..16}; do
+  sleep 0.5
+  if grep -qE "Local:.*http" "$CLIENT_LOG" 2>/dev/null; then
+    CLIENT_URL=$(grep -oE "http://localhost:[0-9]+" "$CLIENT_LOG" | head -1)
+    CLIENT_READY=true
+    break
+  fi
+done
+
+# ── Start backend with the correct ALLOWED_ORIGINS ─────────────────
+# Build origins list: always include 5173 + whatever port Vite actually chose
+ORIGINS="http://localhost:5173,http://localhost:5174,$CLIENT_URL"
+ALLOWED_ORIGINS="$ORIGINS" node --env-file=.env server/index.js > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
-echo "$SERVER_PID" > "$PID_FILE"
+echo "$SERVER_PID"  > "$PID_FILE"
+echo "$CLIENT_PID" >> "$PID_FILE"
 
 # Wait up to 5s for server to be ready
 SERVER_READY=false
@@ -131,27 +150,10 @@ else
   echo -e "  ${YELLOW}⚠${RESET} Backend started (slow to confirm)   → http://localhost:3001/api"
 fi
 
-# ── Start frontend ─────────────────────────────────────────────────
-npm run dev > "$CLIENT_LOG" 2>&1 &
-CLIENT_PID=$!
-echo "$CLIENT_PID" >> "$PID_FILE"
-
-# Wait up to 8s for Vite to be ready
-CLIENT_READY=false
-CLIENT_URL="http://localhost:5173"
-for i in {1..16}; do
-  sleep 0.5
-  if grep -qE "Local:.*http" "$CLIENT_LOG" 2>/dev/null; then
-    CLIENT_URL=$(grep -oE "http://localhost:[0-9]+" "$CLIENT_LOG" | head -1)
-    CLIENT_READY=true
-    break
-  fi
-done
-
 if [ "$CLIENT_READY" = true ]; then
-  echo -e "  ${GREEN}✓${RESET} Frontend running   → ${BOLD}$CLIENT_URL${RESET}"
+  echo -e "  ${GREEN}✓${RESET} Frontend running  → ${BOLD}$CLIENT_URL${RESET}"
 else
-  echo -e "  ${YELLOW}⚠${RESET} Frontend starting  → http://localhost:5173"
+  echo -e "  ${YELLOW}⚠${RESET} Frontend starting → http://localhost:5173"
 fi
 
 # ── Summary ────────────────────────────────────────────────────────
