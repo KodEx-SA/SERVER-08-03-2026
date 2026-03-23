@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import db from '../database/db.js';
 import SAIdValidator from '../utils/saIdValidator.js';
 import { generateToken, authenticateToken, logActivity } from '../middleware/auth.js';
+import { notifyAdminNewIntern } from '../utils/emailService.js';
 
 const router = express.Router();
 
@@ -128,6 +129,21 @@ router.post('/register', async (req, res) => {
       );
       return { userId: userResult.lastInsertRowid, internId: internResult.lastInsertRowid };
     })();
+
+    // Notify all admins about the new registration
+    try {
+      const admins = db.prepare("SELECT email FROM users WHERE role IN ('admin','super_admin') AND status = 'active'").all();
+      for (const admin of admins) {
+        await notifyAdminNewIntern({
+          adminEmail: admin.email,
+          internName: `${firstName} ${lastName}`,
+          internEmail: email,
+          internCode,
+        });
+      }
+    } catch (emailErr) {
+      console.warn('Failed to send admin notification email:', emailErr.message);
+    }
 
     res.status(201).json({
       message: 'Registration successful. Your account is pending approval.',

@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin, logActivity } from '../middleware/auth.js';
+import { notifyTicketUpdated } from '../utils/emailService.js';
 
 const router = express.Router();
 
@@ -116,7 +117,7 @@ router.post('/', authenticateToken, (req, res) => {
 });
 
 // PATCH update ticket
-router.patch('/:id', authenticateToken, (req, res) => {
+router.patch('/:id', authenticateToken, async (req, res) => {
   try {
     const row = db.prepare('SELECT * FROM tickets WHERE id = ?').get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Ticket not found' });
@@ -158,7 +159,26 @@ router.patch('/:id', authenticateToken, (req, res) => {
     logActivity(req.user.id, 'TICKET_UPDATED', { ticketId: req.params.id, fieldsChanged: fields.map(f => f.split(' ')[0]) }, ip);
 
     const updated = db.prepare('SELECT * FROM tickets WHERE id = ?').get(req.params.id);
-    res.json(enrichTicket(updated));
+    const enriched = enrichTicket(updated);
+
+    // Notify ticket creator if status changed and they're an intern
+    if (req.body.status && req.body.status !== row.status) {
+      try {
+        const creator = db.prepare('SELECT u.email, i.first_name FROM users u LEFT JOIN interns i ON u.id = i.user_id WHERE u.id = ?').get(row.created_by);
+        if (creator?.email && creator.first_name) {
+          await notifyTicketUpdated({
+            internEmail: creator.email,
+            firstName: creator.first_name,
+            ticketNumber: updated.ticket_number,
+            ticketTitle: updated.title,
+            newStatus: req.body.status,
+            resolutionNotes: req.body.resolutionNotes ?? updated.resolution_notes,
+          });
+        }
+      } catch (emailErr) { console.warn('Ticket email failed:', emailErr.message); }
+    }
+
+    res.json(enriched);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Failed to update ticket' });
