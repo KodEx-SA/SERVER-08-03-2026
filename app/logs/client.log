@@ -2,11 +2,8 @@
 > my-app@0.0.0 dev
 > vite
 
-Port 5173 is in use, trying another one...
 
-  VITE v7.3.0  ready in 3999 ms
+  VITE v7.3.0  ready in 4824 ms
 
-  ➜  Local:   http://localhost:5174/
+  ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
-04:33:28 [vite] .env changed, restarting server...
-04:33:28 [vite] server restarted.
