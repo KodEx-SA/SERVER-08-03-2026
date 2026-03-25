@@ -41,7 +41,6 @@ export default function InternLoginPage() {
         <div className="absolute bottom-[-60px] right-[-60px] w-80 h-80 rounded-full blur-3xl" style={{ background: 'rgba(21,128,61,0.22)' }}/>
 
         <div className="relative z-10 flex flex-col h-full p-10 xl:p-14">
-          {/* Logo */}
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl flex items-center justify-center border border-white/10" style={{ background: 'rgba(22,163,74,0.3)', backdropFilter: 'blur(8px)' }}>
               <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -54,7 +53,6 @@ export default function InternLoginPage() {
             </div>
           </div>
 
-          {/* Hero */}
           <div className="mt-auto mb-12">
             <div className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 mb-6 border border-white/10" style={{ background: 'rgba(22,163,74,0.2)', backdropFilter: 'blur(8px)' }}>
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"/>
@@ -67,7 +65,7 @@ export default function InternLoginPage() {
               </span>
             </h1>
             <p className="leading-relaxed max-w-sm mb-10" style={{ color: 'rgba(134,239,172,0.65)', fontSize: 'clamp(.9rem,1.2vw,1.05rem)' }}>
-              One platform to log tasks, manage tickets, upload documents and track attendance — built for ETS interns.
+              One platform to log tasks, manage tickets, upload documents and track attendance.
             </p>
             <div className="space-y-3.5">
               {services.map((s, i) => (
@@ -79,7 +77,6 @@ export default function InternLoginPage() {
             </div>
           </div>
 
-          {/* Bottom stats */}
           <div className="grid grid-cols-3 gap-3 border-t pt-8" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
             {[['ETS','Company'],['2015','Founded'],['NW','Province']].map(([v,l]) => (
               <div key={l}>
@@ -93,7 +90,6 @@ export default function InternLoginPage() {
 
       {/* ── Right panel ── */}
       <div className="flex-1 flex flex-col min-h-screen lg:min-h-0">
-        {/* Mobile top bar */}
         <div className="lg:hidden flex items-center justify-between px-5 pt-6 pb-4 border-b border-white/5">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(22,163,74,0.4)' }}>
@@ -111,7 +107,6 @@ export default function InternLoginPage() {
           </Link>
         </div>
 
-        {/* Form */}
         <div className="flex-1 flex items-center justify-center px-5 py-10 sm:px-8 lg:px-12 xl:px-16">
           <div className="w-full max-w-[420px]">
 
@@ -175,21 +170,7 @@ export default function InternLoginPage() {
               </button>
             </form>
 
-            {/* Divider */}
-            <div className="flex items-center gap-3 mt-7 mb-4">
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }}/>
-              <span className="text-xs font-medium uppercase tracking-wider px-1" style={{ color: 'rgba(255,255,255,0.25)' }}>Quick fill</span>
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }}/>
-            </div>
-
-            <button type="button" onClick={() => { setEmail('intern@eullafied.co.za'); setPassword('Intern@12345code'); setError(''); }}
-              className="w-full flex flex-col items-center gap-0.5 px-4 py-3 rounded-xl border text-sm font-semibold transition-all hover:opacity-90 mb-6"
-              style={{ background: 'rgba(22,163,74,0.08)', borderColor: 'rgba(22,163,74,0.25)', color: '#4ade80' }}>
-              <span>Test Intern Account</span>
-              <span className="font-normal opacity-60 text-xs">intern@eullafied.co.za · Intern@12345code</span>
-            </button>
-
-            <div className="space-y-3 text-center">
+            <div className="space-y-3 text-center mt-7">
               <p className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>
                 Don't have an account?{' '}
                 <Link to="/register" className="font-medium transition-colors" style={{ color: 'rgba(74,222,128,0.8)' }}>

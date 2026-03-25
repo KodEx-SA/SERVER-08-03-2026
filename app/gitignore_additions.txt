@@ -1,6 +1,6 @@
+
 # ── IMS sensitive files ──────────────────────────────────────────
 CREDENTIALS.txt
-gitignore_additions.txt
 reset-password.js
 .env
 .env.local
