@@ -188,7 +188,7 @@ export default function AdminLoginPage() {
 
             <div className="grid grid-cols-2 gap-2 mb-6">
               {[
-                { label: 'Super Admin', sub: 'superadmin@internsystem.com', pass: 'Admin@123', style: 'rgba(168,85,247,0.08)', border: 'rgba(168,85,247,0.25)', text: '#c084fc' },
+                { label: 'Super Admin', sub: 'superadmin@internsystem.com', pass: 'Admin@12345code', style: 'rgba(168,85,247,0.08)', border: 'rgba(168,85,247,0.25)', text: '#c084fc' },
                 { label: 'Admin',       sub: 'admin@eullafied.co.za',       pass: 'Admin@123', style: 'rgba(29,111,164,0.08)', border: 'rgba(29,111,164,0.3)',  text: '#60b4e8' },
               ].map(c => (
                 <button key={c.label} type="button" onClick={() => { setEmail(c.sub); setPassword(c.pass); setError(''); }}
