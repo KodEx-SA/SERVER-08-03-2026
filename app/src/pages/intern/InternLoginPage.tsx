@@ -182,11 +182,11 @@ export default function InternLoginPage() {
               <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }}/>
             </div>
 
-            <button type="button" onClick={() => { setEmail('intern@eullafied.co.za'); setPassword('Intern@123'); setError(''); }}
+            <button type="button" onClick={() => { setEmail('intern@eullafied.co.za'); setPassword('Intern@12345code'); setError(''); }}
               className="w-full flex flex-col items-center gap-0.5 px-4 py-3 rounded-xl border text-sm font-semibold transition-all hover:opacity-90 mb-6"
               style={{ background: 'rgba(22,163,74,0.08)', borderColor: 'rgba(22,163,74,0.25)', color: '#4ade80' }}>
               <span>Test Intern Account</span>
-              <span className="font-normal opacity-60 text-xs">intern@eullafied.co.za · Intern@123</span>
+              <span className="font-normal opacity-60 text-xs">intern@eullafied.co.za · Intern@12345code</span>
             </button>
 
             <div className="space-y-3 text-center">
